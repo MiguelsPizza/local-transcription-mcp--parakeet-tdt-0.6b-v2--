@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transcription-mcp-server"
+version = "0.1.0"
+description = "An MCP server for transcribing MP4 files using Parakeet TDT model."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT License" } # Or your preferred license
+# Add dependencies here if you want to also manage them via pyproject.toml
+# for other packaging tools, though fastmcp dev/install will use --with.
+dependencies = [
+    "fastmcp",
+    "pydub",
+    "nemo_toolkit[asr]",
+]
+
+# Optional: For linters or other tools you might add later
+# [tool.ruff]
+# select = ["E", "F", "W", "I"] 

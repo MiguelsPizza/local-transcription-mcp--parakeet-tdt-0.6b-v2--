@@ -1,0 +1,14 @@
+.claude
+__pycache__
+.venv
+.temp_transcription_server
+.vscode
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+temp_audio
+temp_uploads
