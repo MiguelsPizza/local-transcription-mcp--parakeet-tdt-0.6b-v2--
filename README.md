@@ -1,169 +1,272 @@
 # Parakeet Transcription MCP Server
 
-This MCP server takes an MP4 file, converts it to WAV or FLAC audio (16kHz mono),
-and then transcribes the audio to text using the NVIDIA Parakeet TDT 0.6B V2 model.
-The server is built using FastMCP 2.0+.
+**Version:** 0.1.0
 
-## Features
+This is an MCP (Model Context Protocol) server designed to transcribe audio and video files into text using NVIDIA's powerful Parakeet TDT 0.6B V2 model. It also offers tools to get details about the model itself.
 
-- Converts MP4 to WAV or FLAC
-- Transcribes audio using Parakeet TDT 0.6B V2
-- Supports word-level and segment-level timestamps
-- Provides information about the ASR model
-- Model pre-loading on server startup
-- Temporary file management
+Built with FastMCP, this server relies on `pydub` (which requires FFmpeg) for handling audio conversions and `nemo_toolkit[asr]` for the core transcription capabilities.
 
+**Important Notes:** FFmpeg must be installed and accessible in your system's PATH. All file paths provided to the server tools must be absolute.
 
-## Model Used
+## Quickstart
 
-- **Name:** `nvidia/parakeet-tdt-0.6B-v2`
-- **Description:** 600-million-parameter ASR model for English transcription with punctuation, capitalization, and timestamp prediction
-- **Input:** 16kHz mono WAV or FLAC audio
-- **Output:** Text string (with punctuation and capitalization), optional timestamps
-- **License:** CC-BY-4.0
+Here's a brief overview of the steps to get the server running:
 
-## Prerequisites
-
-1. **Python:** 3.9+ (Managed by Mise)
-2. **Mise (formerly RTX):** For Python version and project dependency management.
-   - Installation: [https://mise.jdx.dev/getting-started.html](https://mise.jdx.dev/getting-started.html)
-3. **uv (Python Package Installer):** A fast Python package installer and resolver, used for installing project dependencies.
-   - Installation: [https://github.com/astral-sh/uv#installation](https://github.com/astral-sh/uv#installation)
-4. **FFmpeg:** Required by `pydub` for audio conversion. Ensure it's installed and in your system's PATH.
-   - Download from [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
-   - Ensure that FFmpeg is added to your system's PATH environment variable.
-5. **NVIDIA GPU (Recommended):** For optimal performance, an NVIDIA GPU with CUDA drivers installed is highly recommended. The model will run on CPU but will be significantly slower.
-6. **NVIDIA NeMo Toolkit & PyTorch:** Specific versions might be required. Check the Parakeet model card and NeMo documentation for compatibility.
-
-## Installation
-
-1.  **Install Mise:** If you haven't already, install Mise by following the instructions [here](https://mise.jdx.dev/getting-started.html).
-2.  **Install uv:** If you haven't already, install uv by following its [installation guide](https://github.com/astral-sh/uv#installation).
-
-3.  **Set up Python with Mise:**
-    Navigate to the project directory. Mise uses the `.tool-versions` file to determine the Python version (e.g., `python 3.12`). If this file doesn't exist, you can create it or use `mise use python@3.12` (replace `3.12` with your desired compatible version). Mise will automatically download and install the specified Python version if it's not already available.
+1.  **Install Prerequisites:** Ensure you have `mise`, `uv`, and **FFmpeg** installed and accessible in your system's PATH. See the [Prerequisites](#prerequisites) section for details.
+2.  **Clone the Repository:** If you haven't already, clone this repository and navigate into the project directory.
+3.  **Set up Environment:** Use `mise` to install the correct Python version and activate the environment:
     ```bash
-    # Ensure .tool-versions file has a line like:
-    # python 3.12
-    # Or run:
-    mise use python@3.12 # Or your desired version e.g. python@3.10, python@3.11
+    mise install
     ```
-    Mise will automatically manage your environment when you `cd` into the project directory.
-
-4.  **Install dependencies with uv:**
-    Once Mise has configured your Python environment for the project, install the dependencies using `uv`:
+4.  **Install Dependencies:** Use `uv` to install the required Python packages:
     ```bash
     uv pip install -r requirements.txt
     ```
-    `uv` will create and manage a virtual environment for you by default (typically in `.venv` in your project root) if one isn't already activated.
-    *Note: Installing `nemo_toolkit[asr]` and `python-json-logger` can take some time as it pulls many dependencies, including PyTorch if not already installed or if a specific version is required. `uv` should handle this process efficiently.*
+5.  **Run the Server:** Start the MCP server using `fastmcp`:
+    ```bash
+    fastmcp run server.py
+    ```
+    The server will typically start using the STDIO transport. See [Running the Server](#running-the-server) for other options like HTTP.
+
+Once the server is running, you can interact with it using an MCP-compatible client. See [Interacting with the Server (Client Usage)](#interacting-with-the-server-client-usage) for examples.
+
+## About the ASR Model: NVIDIA Parakeet TDT 0.6B V2 (En)
+
+This server utilizes the NVIDIA Parakeet TDT 0.6B V2 model, a FastConformer architecture with 600 million parameters. It's optimized for high-quality English transcription, featuring accurate word-level timestamps, automatic punctuation and capitalization, and robust performance on spoken numbers and song lyrics. It can efficiently transcribe audio segments up to 24 minutes in a single pass.
+
+*   **Input:** 16kHz Audio (WAV or FLAC), Monochannel.
+*   **Output:** Text with optional Punctuation, Capitalization, and Timestamps.
+*   **License:** CC-BY-4.0.
+*   **Demo & More Info:** [Hugging Face Spaces](https://huggingface.co/spaces/nvidia/parakeet-tdt-0.6b-v2)
+
+While optimized for NVIDIA GPUs, the model will fall back to CPU if a compatible GPU isn't detected (note: CPU performance may be significantly slower).
+
+## Features
+
+*   Transcribe various audio/video formats.
+*   Automatic conversion of input audio to the required 16kHz, mono WAV or FLAC format.
+*   Option to include detailed word and segment timestamps.
+*   Formatted transcription output with customizable line breaks when timestamps are included.
+*   Retrieve information about the loaded ASR model.
+
+## Prerequisites
+
+1.  **Python:** Version 3.12 (as specified in `.tool-versions` and `mise.toml`).
+2.  **`mise`:** Used to manage Python versions (and other tools). Install `mise` by following the instructions on the [official `mise` documentation](https://mise.jdx.dev/getting-started.html).
+3.  **`uv`:** An extremely fast Python package installer and resolver. Install `uv` by following instructions on the [Astral `uv` documentation](https://docs.astral.sh/uv/getting-started/installation/).
+4.  **FFmpeg:** Required by `pydub` for audio and video file format conversions. FFmpeg must be installed and accessible in your system's PATH.
+
+    *   **macOS (using Homebrew):**
+        ```bash
+        brew install ffmpeg
+        ```
+    *   **Linux (using apt - Debian/Ubuntu):**
+        ```bash
+        sudo apt update && sudo apt install ffmpeg
+        ```
+    *   **Linux (using yum - CentOS/RHEL/Fedora):**
+        ```bash
+        sudo yum install ffmpeg  # Or dnf for newer Fedora: sudo dnf install ffmpeg
+        ```
+    *   **Windows:**
+        Download FFmpeg from the [official FFmpeg website](https://ffmpeg.org/download.html). Extract the archive and add the `bin` directory (containing `ffmpeg.exe`) to your system's PATH environment variable.
+    *   **Verify FFmpeg installation:**
+        Open a new terminal/command prompt and type:
+        ```bash
+        ffmpeg -version
+        ```
+        You should see version information if it's installed correctly.
+
+## Setup and Installation
+
+1.  **Clone the repository (if you haven't already):**
+    ```bash
+    # git clone <repository-url>
+    # cd <repository-directory>
+    ```
+
+2.  **Set up Python version using `mise`:**
+    Navigate to the project directory in your terminal and run:
+    ```bash
+    mise install
+    ```
+    This will ensure you are using Python 3.12 as specified in `.tool-versions`.
+
+3.  **Install Python dependencies using `uv`:**
+    Make sure your `mise` environment is active (it should be if you `cd` into the directory after `mise install`). Then run:
+    ```bash
+    uv pip install -r requirements.txt
+    ```
+    This will install `fastmcp`, `pydub`, `nemo_toolkit[asr]`, and other necessary packages.
 
 ## Running the Server
 
-You can run the server using the FastMCP CLI (which is installed as part of `fastmcp`) or directly with Python.
+The recommended way to run the MCP server is using the `fastmcp` command-line interface:
+```bash
+fastmcp run server.py
+```
 
-1.  **Direct Execution (Recommended for local development):**
-    These commands run the server in your current Mise-managed environment.
-    *   Using FastMCP CLI (stdio transport by default):
-        ```bash
-        fastmcp run server.py
-        ```
-    *   Using Python directly (uses stdio transport if `mcp.run()` is called without arguments in `server.py`):
-        ```bash
-        python server.py
-        ```
-    For other transports like HTTP:
-    ```bash
-    fastmcp run server.py --transport streamable-http --port 8000
-    ```
+This will typically start the server using the **STDIO** transport, which is suitable for local clients like the Claude Desktop App or command-line client scripts.
 
-2.  **Development with MCP Inspector (`fastmcp dev`):
-    This command runs your server in an isolated environment with the MCP Inspector, similar to how `uvx` might run a packaged tool. It's for testing over STDIO only.
-    ```bash
-    fastmcp dev server.py --with-editable . --with pydub --with "nemo_toolkit[asr]" --with python-json-logger
-    ```
-    *   **Important:** `fastmcp dev` creates an isolated environment. You **must** explicitly specify all dependencies using `--with` for packages from PyPI (like `pydub`, `"nemo_toolkit[asr]"`, `python-json-logger`) and `--with-editable .` to include your local project files.
-    *   The `--with-editable .` flag requires a `pyproject.toml` (or `setup.py`) file in your project root to recognize it as a package.
-    *   The MCP Inspector will launch, and you may need to select "STDIO" and connect manually.
+To run the server with HTTP transport (e.g., for network access):
+```bash
+fastmcp run server.py --transport streamable-http --port 8000
+```
+The server will then be accessible at `http://localhost:8000/mcp`.
 
-3.  **Installation for Claude Desktop-like environments (`fastmcp install`):
-    This command also creates an isolated environment, similar to `uvx` packaging a tool for execution. It's primarily for STDIO transport.
-    ```bash
-    fastmcp install server.py --name "ParakeetTranscription" --with-editable . --with pydub --with "nemo_toolkit[asr]" --with python-json-logger
-    ```
-    *   Like `fastmcp dev`, you must specify all dependencies using `--with` and `--with-editable`.
-    *   The `--with-editable .` flag requires a `pyproject.toml` (or `setup.py`) file in your project root.
+## Available Tools (API)
 
-*Note on `uvx` itself: While `fastmcp dev` and `fastmcp install` provide `uvx`-like isolated environments for your server, directly running this local development server *with* `uvx` (e.g., `uvx run python server.py`) is not the standard workflow. `uvx` is typically used to run Python applications that are packaged and distributed, often with a defined entry point. The FastMCP client also has a `UvxStdioTransport` for running *packaged* MCP servers as tools, which is a different scenario.*
-
-## How to Call the Server (Client Example)
-
-A Python client script `client_example.py` is provided to demonstrate how to interact with the server.
-
-1.  **Ensure the server is running** (e.g., `python server.py` or `fastmcp run server.py` in one terminal).
-2.  **Modify `client_example.py`**:
-    *   Update the `mp4_path` variable in `client_example.py` to point to the **absolute path** of an MP4 file you want to transcribe.
-3.  **Run the client script** in another terminal:
-    ```bash
-    python client_example.py
-    ```
-
-## Available MCP Tools
+The server exposes the following tools through the Model Context Protocol:
 
 ### 1. `transcribe_audio`
 
-Transcribes an audio/video file to text.
-
-- **Description:** Takes the path to an audio/video file, converts it to WAV or FLAC, and returns the transcription.
-- **Arguments:**
-  - `audio_file_path` (str, required): Absolute path to the audio/video file.
-  - `output_format` (str, optional): Intermediate audio format (`"wav"` or `"flac"`). Default: `"wav"`.
-  - `include_timestamps` (bool, optional): Whether to include word and segment timestamps. Default: `True`.
-- **Returns:** A JSON object with the transcription, timestamps (if requested), and status, or an error message.
-
-**Example CLI call (after starting the server with `fastmcp run server.py`):**
-```bash
-# Basic transcription
-fastmcp call transcribe_audio '{"audio_file_path": "/path/to/your/audio.mp4"}'
-
-# With FLAC intermediate and no timestamps
-fastmcp call transcribe_audio '{"audio_file_path": "/path/to/your/audio.mp4", "output_format": "flac", "include_timestamps": false}'
-```
+*   **Description:** Transcribes an audio/video file to text using the Parakeet TDT 0.6B V2 model.
+*   **Parameters:**
+    *   `audio_file_path` (string, **absolute path**, required): The absolute path to the audio or video file to be transcribed.
+    *   `output_format` (string, optional, default: `"wav"`): The intermediate audio format to convert the input file to before transcription. Supported values: `"wav"`, `"flac"`.
+    *   `include_timestamps` (boolean, optional, default: `True`): Whether to include word and segment level timestamps in the transcription output.
+    *   `line_character_limit` (integer, optional, default: `80`, min: 40, max: 200): The character limit per line for formatted transcription output when timestamps are included.
+*   **Returns:** A JSON object containing:
+    *   `message` (string): A status message indicating the outcome of the transcription.
+    *   `file_processed` (string): The original `audio_file_path` that was processed.
+    *   `transcription` (string): The transcribed text, potentially formatted with timestamps.
 
 ### 2. `get_asr_model_info`
 
-Provides information about the ASR model being used.
+*   **Description:** Provides detailed information about the ASR model being used (NVIDIA Parakeet TDT 0.6B V2).
+*   **Parameters:** None.
+*   **Returns:** A JSON object containing model details such as:
+    *   `model_name` (string)
+    *   `status` (string): "Loaded" or an error message.
+    *   `input_requirements` (string)
+    *   `output_type` (string)
+    *   `license` (string)
+    *   `note` (string)
 
-- **Description:** Returns details about the loaded Parakeet ASR model.
-- **Arguments:** None.
-- **Returns:** A JSON object with model information.
+## Adding to MCP Client Hosts
 
-**Example CLI call:**
+You can configure MCP clients (like Claude Desktop or other tools that support custom MCP server definitions) to use this server.
+
+### Manual JSON Configuration
+
+For clients that use a JSON configuration file (e.g., `cline_mcp_settings.json` or similar) to define MCP servers, you can add an entry for this transcription server. Ensure that you have completed the "Setup and Installation" steps above so that Python 3.12 and all dependencies are available in your environment when the client attempts to run the server.
+
+Here's an example configuration snippet:
+
+```json
+{
+  "mcpServers": {
+    "transcription-mcp": {
+      "autoApprove": [],
+      "disabled": true,
+      "timeout": 600,
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "fastmcp",
+        "--with",
+        "nemo_toolkit[asr]",
+        "--with",
+        "pydub",
+        "fastmcp",
+        "run",
+        "/absolute/path/to/this/file/server.py"
+      ],
+      "env": {},
+      "transportType": "stdio"
+    }
+    // ... other server configurations ...
+  }
+}
+```
+
+### Using `fastmcp install` (for supported clients)
+
+Some MCP clients, like recent versions of the Claude Desktop App, integrate with the `fastmcp install` command. This can simplify setup by creating an isolated environment for the server. If your client supports this, you can install the server from the root directory of this project using:
+
 ```bash
-fastmcp call get_asr_model_info '{}'
+fastmcp install server.py -e . -n "Parakeet Transcription Server"
 ```
 
-## Directory Structure
+*   `-e .`: Installs the current directory (which should contain `pyproject.toml`) in editable mode. The `pyproject.toml` file lists the core dependencies (`fastmcp`, `pydub`, `nemo_toolkit[asr]`), which `fastmcp install` should pick up.
+*   `-n "Parakeet Transcription Server"`: Sets a custom name for the server in the client application.
+
+This command will typically handle packaging the server and its specified dependencies for use by the client.
+
+## Interacting with the Server (Client Usage)
+
+You can interact with this MCP server using any FastMCP-compatible client. Here's a basic Python example using the `fastmcp` library:
+
+```python
+import asyncio
+from fastmcp import Client
+
+# If running the server with 'fastmcp run server.py' (defaulting to STDIO):
+client = Client("server.py")
+
+# If running the server with HTTP, e.g., 'fastmcp run server.py --transport streamable-http --port 8000':
+# client = Client("http://localhost:8000/mcp")
+
+# If you've added it to your client's host configuration (e.g., Claude Desktop)
+# and the client library allows referencing by name/ID:
+# client = Client(mcp_server_id="parakeet-transcription-server-local") # Syntax depends on client library
+
+async def main():
+    async with client:
+        print(f"Client connected: {client.is_connected()}")
+
+        # Example 1: Get ASR Model Information
+        try:
+            print("\nFetching ASR model info...")
+            model_info_result = await client.call_tool("get_asr_model_info")
+            # Assuming the result is a JSON string in the first TextContent part
+            model_info_dict = model_info_result[0].text_content_as_json_dict()
+            print("ASR Model Info:")
+            for key, value in model_info_dict.items():
+                 print(f"  {key}: {value}")
+        except Exception as e:
+            print(f"Error calling get_asr_model_info: {e}")
+
+        # Example 2: Transcribe an audio file (replace with an ACTUAL absolute path)
+        # Ensure the audio file exists and the path is absolute.
+        audio_file_to_transcribe = "/Users/yourname/path/to/your/audio.mp3" # <<< REPLACE THIS
+        #
+        if audio_file_to_transcribe != "/Users/yourname/path/to/your/audio.mp3": # Basic check
+            try:
+                print(f"\nTranscribing '{audio_file_to_transcribe}'...")
+                transcription_args = {
+                    "audio_file_path": audio_file_to_transcribe,
+                    "include_timestamps": True,
+                    "output_format": "wav" # or "flac"
+                }
+                transcription_result = await client.call_tool("transcribe_audio", transcription_args)
+                # Assuming the result is a JSON string in the first TextContent part
+                result_data = transcription_result[0].text_content_as_json_dict()
+                print(f"File Processed: {result_data.get('file_processed')}")
+                print(f"Message: {result_data.get('message')}")
+                print("Transcription Output:")
+                print(result_data.get('transcription'))
+            except Exception as e:
+                print(f"Error calling transcribe_audio: {e}")
+        else:
+            print("\nPlease update 'audio_file_to_transcribe' with an actual absolute file path to test transcription.")
+
+    print(f"\nClient disconnected: {client.is_connected()}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
-transcription-mcp/
-├── server.py                 # Main MCP server script
-├── client_example.py         # Example client script to call the server
-├── audio_converter.py        # Module for MP4 to WAV/FLAC conversion
-├── transcriber.py            # Module for using the Parakeet model
-├── .tool-versions            # Specifies Python version for Mise
-├── pyproject.toml            # Project definition for Python packaging
-├── requirements.txt          # Project dependencies
-├── README.md                 # This file
-├── temp_uploads/             # (Created at runtime) Temporary storage for uploads
-└── temp_audio/               # (Created at runtime) Temporary storage for converted audio files
-```
 
-## Important Notes
+**Note:** For the transcription example, make sure to replace `"/Users/yourname/path/to/your/audio.mp3"` with an actual **absolute path** to an audio or video file on your system.
 
-- **Model Download:** The first time ASRModel.from_pretrained() is called for nvidia/parakeet-tdt-0.6B-v2, the model weights (which can be large) will be downloaded. This might take some time and requires an internet connection. Subsequent runs will use the cached model.
-- **GPU Memory:** The Parakeet 0.6B model requires at least 2GB of RAM (GPU RAM preferably for good performance). Ensure your system meets these requirements.
-- **Error Handling:** The server includes error handling and uses `ToolError` for client-facing errors. Check the server logs for detailed internal error messages.
-- **File Paths in transcribe_audio:** The `audio_file_path` argument **must** be an absolute path to the audio/video file on the server's filesystem. This is a strict requirement.
+## Main Dependencies
 
+*   **FastMCP:** The framework for building MCP servers.
+*   **Pydub:** For audio file manipulation and conversion (requires FFmpeg).
+*   **NVIDIA NeMo Toolkit (`nemo_toolkit[asr]`):** For ASR capabilities, including the Parakeet model. This also includes `torch` and `torchaudio`.
 
-run --with fastmcp --with nemo_toolkit[asr] --with pydub --with python-json-logger fastmcp run server.py
+## Project License
+
+This project is licensed under the MIT License (refer to `pyproject.toml`).
+The NVIDIA Parakeet TDT 0.6B V2 model itself is governed by the CC-BY-4.0 license.

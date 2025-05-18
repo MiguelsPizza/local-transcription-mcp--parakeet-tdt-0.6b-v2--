@@ -218,6 +218,5 @@ async def transcribe_audio_file(ctx: Context, input_data: TranscriptionInput) ->
         [str(input_data.audio_path)],
         timestamps=input_data.include_timestamps
     )
-    await ctx.info(f"Nemo output: {nemo_output}")
     
     return await _process_transcription_output(ctx, nemo_output, str(input_data.audio_path), input_data.include_timestamps)
