@@ -6,8 +6,4 @@ pydub
 
 # NVIDIA NeMo Toolkit for Parakeet Model
 nemo_toolkit[asr]
-
-# PyTorch (ensure compatibility with NeMo and your hardware)
-# Uncomment and set specific version if needed
-# torch==2.0.1
-# torchaudio==2.0.1
+pytest
