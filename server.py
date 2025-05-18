@@ -1,7 +1,5 @@
 import os
 from typing import Annotated, Literal
-from contextlib import asynccontextmanager
-from collections.abc import AsyncIterator
 
 from pydantic import Field
 from fastmcp import FastMCP, Context
@@ -13,7 +11,7 @@ from src.transcriber import (
     load_model as load_transcription_model
 )
 from src.models.transcription_models import TranscriptionInput, TranscriptionResult
-from src.utils.file_utils import TEMP_UPLOAD_DIR, TEMP_AUDIO_DIR, cleanup_temp_files
+from src.utils.file_utils import TEMP_AUDIO_DIR, cleanup_temp_files
 from src.utils.formatting_utils import _format_transcription_output
 
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
