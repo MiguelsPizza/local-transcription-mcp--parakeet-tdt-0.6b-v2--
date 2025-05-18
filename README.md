@@ -81,7 +81,7 @@ While optimized for NVIDIA GPUs, the model will fall back to CPU if a compatible
 
 1.  **Clone the repository (if you haven't already):**
     ```bash
-    # git clone <repository-url>
+    # git clone https://github.com/MiguelsPizza/local-transcription-mcp--parakeet-tdt-0.6b-v2--.git
     # cd <repository-directory>
     ```
 
@@ -105,14 +105,12 @@ The recommended way to run the MCP server is using the `fastmcp` command-line in
 ```bash
 fastmcp run server.py
 ```
+or
 
-This will typically start the server using the **STDIO** transport, which is suitable for local clients like the Claude Desktop App or command-line client scripts.
-
-To run the server with HTTP transport (e.g., for network access):
 ```bash
-fastmcp run server.py --transport streamable-http --port 8000
+fastmcp dev server.py
 ```
-The server will then be accessible at `http://localhost:8000/mcp`.
+to test with model inspector
 
 ## Available Tools (API)
 
