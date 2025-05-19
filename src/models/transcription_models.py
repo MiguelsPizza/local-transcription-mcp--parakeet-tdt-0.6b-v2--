@@ -7,6 +7,7 @@ class TranscriptionInput(BaseModel):
     """Input data model for transcription requests."""
     audio_path: FilePath = Field(..., description="Absolute path to the audio file for transcription.")
     include_timestamps: bool = Field(True, description="Whether to include timestamps in the transcription result.")
+    segment_length_minutes: int = Field(20, description="Maximum length of audio segments in minutes for transcription. Audio longer than this will be split.", ge=1, le=24)
 
     @validator('audio_path')
     def audio_path_must_exist_and_be_absolute(cls, v: FilePath) -> FilePath:

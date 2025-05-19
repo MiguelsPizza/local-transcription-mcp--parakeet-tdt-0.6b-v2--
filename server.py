@@ -40,11 +40,14 @@ async def transcribe_audio(
     audio_file_path: Annotated[str, Field(description="Absolute path to the audio/video file to transcribe. The server will process this file.")],
     output_format: Annotated[Literal["wav", "flac"], Field(description="The intermediate audio format ('wav' or 'flac'). Parakeet supports both. This determines the format of the temporary audio file processed by the ASR model.")] = "wav",
     include_timestamps: Annotated[bool, Field(description="Whether to include word and segment level timestamps in the output. If true, the output may be formatted with timestamps.")] = True,
-    line_character_limit: Annotated[int, Field(description="Character limit per line for formatted transcription output with timestamps. Default is 80.", ge=40, le=200)] = 80
+    line_character_limit: Annotated[int, Field(description="Character limit per line for formatted transcription output with timestamps. Default is 80.", ge=40, le=200)] = 80,
+    segment_length_minutes: Annotated[int, Field(description="Maximum length of audio segments in minutes for transcription. Audio longer than this will be split. Default is 20 minutes, max 24.", ge=1, le=24)] = 20
 ) -> dict:
     """
     Takes the absolute path to an audio/video file, converts it to WAV or FLAC,
     and returns the transcription. If an error occurs, it raises a ToolError.
+    Audio files longer than `segment_length_minutes` will be split into segments
+    of that approximate duration and transcribed sequentially.
 
     Args:
         ctx: The MCP Context object.
@@ -54,6 +57,8 @@ async def transcribe_audio(
                             Default is True.
         line_character_limit: Character limit for formatting output with timestamps.
                             Default is 80.
+        segment_length_minutes: Maximum length of audio segments in minutes.
+                                Audio longer than this will be split. Default is 20.
 
     Returns:
         A dictionary containing the transcription, potentially with timestamps.
@@ -62,7 +67,7 @@ async def transcribe_audio(
         ToolError: If any error occurs during the process (e.g., file not found,
                    conversion failure, transcription failure, or invalid input).
     """
-    await ctx.info(f"Received audio_file_path: '{audio_file_path}', output_format: '{output_format}', include_timestamps: {include_timestamps}, line_char_limit: {line_character_limit}")
+    await ctx.info(f"Received audio_file_path: '{audio_file_path}', output_format: '{output_format}', include_timestamps: {include_timestamps}, line_char_limit: {line_character_limit}, segment_length_minutes: {segment_length_minutes}")
 
     if not isinstance(audio_file_path, str) or not audio_file_path.strip():
         error_msg = "Error: audio_file_path must be a non-empty string."
@@ -99,7 +104,8 @@ async def transcribe_audio(
 
         transcription_input = TranscriptionInput(
             audio_path=converted_audio_path,
-            include_timestamps=include_timestamps
+            include_timestamps=include_timestamps,
+            segment_length_minutes=segment_length_minutes
         )
         transcription_result = await transcribe_audio_file(ctx, transcription_input)
         await ctx.report_progress(2, 3)
