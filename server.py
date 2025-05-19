@@ -1,5 +1,8 @@
 import os
 from typing import Annotated, Literal
+import platform
+import psutil
+import torch
 
 from pydantic import Field
 from fastmcp import FastMCP, Context
@@ -25,9 +28,20 @@ mcp = FastMCP(
         "pydantic",
         "pydub",
         "torch",
-        "torchaudio"
+        "torchaudio",
+        "psutil"
     ],
-    instructions="This server provides tools to transcribe audio/video files to text using Parakeet TDT 0.6B V2 and get ASR model information. FFmpeg must be installed and in your PATH. All file paths provided to tools must be absolute."
+    instructions="""This server provides tools for audio/video transcription using NVIDIA Parakeet TDT 0.6B V2 
+and resources to get ASR model information and system hardware specifications.
+FFmpeg must be installed and in your PATH. All file paths provided to tools must be absolute.
+
+Recommended Workflow:
+1. Read resource `info://system_hardware_specs` to understand the server's hardware capabilities (CPU, RAM, GPU).
+2. Based on the hardware specs, determine an appropriate `segment_length_minutes` for the `transcribe_audio` tool.
+   - For systems with capable NVIDIA GPUs, longer segments (up to 24 minutes) can be used.
+   - For systems without NVIDIA GPUs or with limited RAM, it is highly recommended to use shorter segments (e.g., 1-10 minutes) to conserve resources. Choose an appropriate length.
+3. Call `transcribe_audio` tool with the audio file and the chosen `segment_length_minutes`.
+4. Resource `info://asr_model` can be read anytime for model-specific details."""
 )
 
 @mcp.tool(
@@ -41,7 +55,7 @@ async def transcribe_audio(
     output_format: Annotated[Literal["wav", "flac"], Field(description="The intermediate audio format ('wav' or 'flac'). Parakeet supports both. This determines the format of the temporary audio file processed by the ASR model.")] = "wav",
     include_timestamps: Annotated[bool, Field(description="Whether to include word and segment level timestamps in the output. If true, the output may be formatted with timestamps.")] = True,
     line_character_limit: Annotated[int, Field(description="Character limit per line for formatted transcription output with timestamps. Default is 80.", ge=40, le=200)] = 80,
-    segment_length_minutes: Annotated[int, Field(description="Maximum length of audio segments in minutes for transcription. Audio longer than this will be split. Default is 20 minutes, max 24.", ge=1, le=24)] = 20
+    segment_length_minutes: Annotated[int, Field(description="Maximum length of audio segments in minutes for transcription. Audio longer than this will be split. Default is 5 minutes, max 24.", ge=1, le=24)] = 5
 ) -> dict:
     """
     Takes the absolute path to an audio/video file, converts it to WAV or FLAC,
@@ -58,7 +72,7 @@ async def transcribe_audio(
         line_character_limit: Character limit for formatting output with timestamps.
                             Default is 80.
         segment_length_minutes: Maximum length of audio segments in minutes.
-                                Audio longer than this will be split. Default is 20.
+                                Audio longer than this will be split. Default is 5.
 
     Returns:
         A dictionary containing the transcription, potentially with timestamps.
@@ -153,9 +167,10 @@ async def transcribe_audio(
             await cleanup_temp_files(converted_audio_path, ctx=ctx)
 
 
-@mcp.tool(
+@mcp.resource(
+    uri="info://asr_model",
+    name="asr_model_information",
     description="Provides information about the ASR model being used (Nvidia Parakeet TDT 0.6B V2).",
-    annotations={"readOnlyHint": True},
     tags={"asr", "model-info"}
 )
 async def get_asr_model_info(ctx: Context) -> dict:
@@ -177,3 +192,76 @@ async def get_asr_model_info(ctx: Context) -> dict:
             "status": "Error loading model or model not loaded yet.",
             "note": "Transcription services will not be available until the model is loaded."
         }
+
+@mcp.resource(
+    uri="info://system_hardware_specs",
+    name="system_hardware_specifications",
+    description="Retrieves system hardware specifications relevant for performance estimation.",
+    tags={"system", "hardware", "info"}
+)
+async def get_system_hardware_specs(ctx: Context) -> dict:
+    """
+    Gathers and returns system hardware information including OS, CPU, RAM, and GPU.
+    This information can be used to estimate performance and recommend appropriate
+    settings for tasks like audio segmentation.
+    """
+    await ctx.info("Gathering system hardware specifications...")
+    specs = {}
+
+    try:
+        specs['os_platform'] = platform.system()
+        specs['os_version'] = platform.version()
+        specs['os_release'] = platform.release()
+        specs['architecture'] = platform.machine()
+
+        specs['cpu_model'] = platform.processor() if platform.processor() else "N/A"
+        specs['cpu_physical_cores'] = psutil.cpu_count(logical=False)
+        specs['cpu_logical_cores'] = psutil.cpu_count(logical=True)
+        cpu_freq_info = psutil.cpu_freq()
+        specs['cpu_frequency_max_ghz'] = round(cpu_freq_info.max / 1000, 2) if cpu_freq_info else "N/A"
+        
+        svmem = psutil.virtual_memory()
+        specs['ram_total_gb'] = round(svmem.total / (1024**3), 2)
+        specs['ram_available_gb'] = round(svmem.available / (1024**3), 2)
+
+        gpu_info = []
+        if torch.cuda.is_available():
+            specs['cuda_available'] = True
+            specs['cuda_version'] = torch.version.cuda
+            num_gpus = torch.cuda.device_count()
+            specs['gpu_count'] = num_gpus
+            for i in range(num_gpus):
+                gpu_name = torch.cuda.get_device_name(i)
+                gpu_memory_total_gb = round(torch.cuda.get_device_properties(i).total_memory / (1024**3), 2)
+                gpu_info.append({
+                    "name": gpu_name,
+                    "memory_total_gb": gpu_memory_total_gb,
+                    "cuda_capability": torch.cuda.get_device_capability(i)
+                })
+        else:
+            specs['cuda_available'] = False
+            specs['gpu_count'] = 0
+            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                 gpu_info.append({
+                    "name": "Apple Metal Performance Shaders (MPS)",
+                    "memory_total_gb": "N/A (Shared with System Memory)",
+                    "notes": "MPS is available for PyTorch on this Mac."
+                })
+            elif platform.system() == "Darwin":
+                gpu_info.append({
+                    "name": "Apple GPU (Integrated or Discrete)",
+                    "memory_total_gb": "N/A (Likely Shared with System Memory)",
+                    "notes": "CUDA not available. Specific GPU details may require OS-specific tools."
+                })
+        specs['gpus'] = gpu_info
+        
+        await ctx.info(f"Successfully gathered hardware specs: {specs}")
+        return specs
+
+    except Exception as e:
+        await ctx.error(f"Error gathering system hardware specifications: {e}")
+        error_response = {"error": f"Failed to retrieve full hardware specs: {str(e)}"}
+        if specs: 
+            specs["error_partial_results"] = str(e)
+            return specs
+        return error_response

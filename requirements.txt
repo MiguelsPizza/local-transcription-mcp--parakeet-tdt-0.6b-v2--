@@ -1,9 +1,7 @@
-# MCP Server
 fastmcp
 
-# Audio Processing
 pydub
 
-# NVIDIA NeMo Toolkit for Parakeet Model
 nemo_toolkit[asr]
 pytest
+psutil 

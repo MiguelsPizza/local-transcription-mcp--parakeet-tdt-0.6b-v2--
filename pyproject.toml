@@ -15,6 +15,7 @@ dependencies = [
     "fastmcp",
     "pydub",
     "nemo_toolkit[asr]",
+    "psutil"
 ]
 
 # Optional: For linters or other tools you might add later

@@ -3249,6 +3249,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
     { name = "nemo-toolkit", extra = ["asr"] },
+    { name = "psutil" },
     { name = "pydub" },
 ]
 
@@ -3256,6 +3257,7 @@ dependencies = [
 requires-dist = [
     { name = "fastmcp" },
     { name = "nemo-toolkit", extras = ["asr"] },
+    { name = "psutil" },
     { name = "pydub" },
 ]
 

@@ -1,3 +1,4 @@
 fastmcp
 pydub
 nemo_toolkit[asr]
+psutil

@@ -48,6 +48,7 @@ While optimized for NVIDIA GPUs, the model will fall back to CPU if a compatible
 *   Option to include detailed word and segment timestamps.
 *   Formatted transcription output with customizable line breaks when timestamps are included.
 *   Retrieve information about the loaded ASR model.
+*   Retrieve system hardware specifications (OS, CPU, RAM, GPU).
 
 ## Prerequisites
 
@@ -97,26 +98,25 @@ While optimized for NVIDIA GPUs, the model will fall back to CPU if a compatible
     ```bash
     uv pip install -r requirements.txt
     ```
-    This will install `fastmcp`, `pydub`, `nemo_toolkit[asr]`, and other necessary packages.
+    This will install `fastmcp`, `pydub`, `nemo_toolkit[asr]`, `psutil`, and other necessary packages.
 
 ## Running the Server
-
-The recommended way to run the MCP server is using the `fastmcp` command-line interface:
-```bash
-fastmcp run server.py
-```
-or
 
 ```bash
 fastmcp dev server.py
 ```
-to test with model inspector
+To run in production:
+```bash
+fastmcp run server.py
+```
 
-## Available Tools (API)
+## Available Components (API)
 
-The server exposes the following tools through the Model Context Protocol:
+The server exposes the following components through the Model Context Protocol:
 
-### 1. `transcribe_audio`
+### Tools
+
+#### 1. `transcribe_audio`
 
 *   **Description:** Transcribes an audio/video file to text using the Parakeet TDT 0.6B V2 model.
 *   **Parameters:**
@@ -124,15 +124,19 @@ The server exposes the following tools through the Model Context Protocol:
     *   `output_format` (string, optional, default: `"wav"`): The intermediate audio format to convert the input file to before transcription. Supported values: `"wav"`, `"flac"`.
     *   `include_timestamps` (boolean, optional, default: `True`): Whether to include word and segment level timestamps in the transcription output.
     *   `line_character_limit` (integer, optional, default: `80`, min: 40, max: 200): The character limit per line for formatted transcription output when timestamps are included.
+    *   `segment_length_minutes` (integer, optional, default: `5`, min: 1, max: 24): Maximum length of audio segments in minutes. Audio longer than this will be split.
 *   **Returns:** A JSON object containing:
     *   `message` (string): A status message indicating the outcome of the transcription.
     *   `file_processed` (string): The original `audio_file_path` that was processed.
     *   `transcription` (string): The transcribed text, potentially formatted with timestamps.
 
-### 2. `get_asr_model_info`
+### Resources
 
+#### 1. ASR Model Information
+
+*   **URI:** `info://asr_model`
+*   **Name:** `asr_model_information`
 *   **Description:** Provides detailed information about the ASR model being used (NVIDIA Parakeet TDT 0.6B V2).
-*   **Parameters:** None.
 *   **Returns:** A JSON object containing model details such as:
     *   `model_name` (string)
     *   `status` (string): "Loaded" or an error message.
@@ -140,6 +144,42 @@ The server exposes the following tools through the Model Context Protocol:
     *   `output_type` (string)
     *   `license` (string)
     *   `note` (string)
+
+#### 2. System Hardware Specifications
+
+*   **URI:** `info://system_hardware_specs`
+*   **Name:** `system_hardware_specifications`
+*   **Description:** Retrieves system hardware specifications relevant for performance estimation, such as OS, CPU, RAM, and GPU details.
+*   **Returns:** A JSON object containing:
+    *   `os_platform` (string): Operating system platform (e.g., "Linux", "Darwin", "Windows").
+    *   `os_version` (string): OS version.
+    *   `os_release` (string): OS release.
+    *   `architecture` (string): System architecture (e.g., "x86_64", "arm64").
+    *   `cpu_model` (string): CPU model name.
+    *   `cpu_physical_cores` (integer): Number of physical CPU cores.
+    *   `cpu_logical_cores` (integer): Number of logical CPU cores (threads).
+    *   `cpu_frequency_max_ghz` (float/string): Maximum CPU frequency in GHz (or "N/A").
+    *   `ram_total_gb` (float): Total system RAM in Gigabytes.
+    *   `ram_available_gb` (float): Available system RAM in Gigabytes.
+    *   `cuda_available` (boolean): True if an NVIDIA GPU with CUDA is detected by PyTorch.
+    *   `cuda_version` (string, optional): CUDA version if available.
+    *   `gpu_count` (integer): Number of detected GPUs (primarily NVIDIA GPUs via CUDA).
+    *   `gpus` (list of objects): Detailed information for each detected GPU.
+        *   `name` (string): GPU name (e.g., "NVIDIA GeForce RTX 3080", "Apple Metal Performance Shaders (MPS)").
+        *   `memory_total_gb` (float/string): Total GPU memory in Gigabytes (or "N/A" or descriptive string for integrated/shared memory).
+        *   `cuda_capability` (tuple, optional): CUDA compute capability (e.g., `(8, 6)`), if applicable.
+        *   `notes` (string, optional): Additional notes, e.g., about MPS availability.
+    *   `error` (string, optional): Present if there was an error retrieving some or all specs.
+    *   `error_partial_results` (string, optional): Present if an error occurred after some specs were already gathered.
+
+## Recommended Workflow for Transcription
+
+1.  **Read Hardware Specs:** Use the `info://system_hardware_specs` resource to get details about the server's hardware.
+2.  **Determine Segment Length:** Based on the hardware (especially GPU availability and RAM), decide on an optimal `segment_length_minutes` for the `transcribe_audio` tool.
+    *   Powerful NVIDIA GPU: Can use longer segments (up to 24 mins).
+    *   No NVIDIA GPU / Low RAM: Use shorter segments (e.g., 1-10 mins, default is 5 mins).
+3.  **Transcribe Audio:** Call the `transcribe_audio` tool with the `audio_file_path` and your chosen `segment_length_minutes`.
+4.  **(Optional) Get Model Info:** Read the `info://asr_model` resource if you need details about the ASR model.
 
 ## Adding to MCP Client Hosts
 
@@ -167,6 +207,7 @@ Here's an example configuration snippet:
         "nemo_toolkit[asr]",
         "--with",
         "pydub",
+        "psutil",
         "fastmcp",
         "run",
         "/absolute/path/to/this/file/server.py"
@@ -187,7 +228,7 @@ Some MCP clients, like recent versions of the Claude Desktop App, integrate with
 fastmcp install server.py -e . -n "Parakeet Transcription Server"
 ```
 
-*   `-e .`: Installs the current directory (which should contain `pyproject.toml`) in editable mode. The `pyproject.toml` file lists the core dependencies (`fastmcp`, `pydub`, `nemo_toolkit[asr]`), which `fastmcp install` should pick up.
+*   `-e .`: Installs the current directory (which should contain `pyproject.toml`) in editable mode. The `pyproject.toml` file lists the core dependencies (`fastmcp`, `pydub`, `nemo_toolkit[asr]`, `psutil`), which `fastmcp install` should pick up.
 *   `-n "Parakeet Transcription Server"`: Sets a custom name for the server in the client application.
 
 This command will typically handle packaging the server and its specified dependencies for use by the client.
@@ -256,15 +297,4 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-**Note:** For the transcription example, make sure to replace `"/Users/yourname/path/to/your/audio.mp3"` with an actual **absolute path** to an audio or video file on your system.
-
-## Main Dependencies
-
-*   **FastMCP:** The framework for building MCP servers.
-*   **Pydub:** For audio file manipulation and conversion (requires FFmpeg).
-*   **NVIDIA NeMo Toolkit (`nemo_toolkit[asr]`):** For ASR capabilities, including the Parakeet model. This also includes `torch` and `torchaudio`.
-
-## Project License
-
-This project is licensed under the MIT License (refer to `pyproject.toml`).
-The NVIDIA Parakeet TDT 0.6B V2 model itself is governed by the CC-BY-4.0 license.
+**Note:** For the transcription example, make sure to replace `
