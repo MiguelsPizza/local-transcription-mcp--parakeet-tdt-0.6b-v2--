@@ -102,6 +102,8 @@ While optimized for NVIDIA GPUs, the model will fall back to CPU if a compatible
 
 ## Running the Server
 
+### MCP Server
+
 ```bash
 fastmcp dev server.py
 ```
@@ -110,11 +112,38 @@ To run in production:
 fastmcp run server.py
 ```
 
+### FastAPI Server (for REST API)
+
+To use the REST API, you'll need to install the additional dependencies first if you haven't already (this includes `fastapi`, `uvicorn`, and `python-multipart`):
+
+```bash
+# Ensure your mise environment is active
+uv pip install -r requirements.txt 
+```
+
+Then, run the FastAPI application using Uvicorn from the project root:
+
+```bash
+# From the root of the project (transcription-mcp)
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+*   `api.main:app` tells Uvicorn to look for an object named `app` in the `main.py` file inside the `api` directory.
+*   `--host 0.0.0.0` makes the server accessible from other devices on your network.
+*   `--port 8000` specifies the port to run on.
+*   `--reload` enables auto-reloading when code changes, which is useful for development.
+
+Once running, the API will be accessible at `http://localhost:8000` (or your machine's IP address on port 8000). Interactive API documentation (Swagger UI) will be available at `http://localhost:8000/docs`.
+
 ## Available Components (API)
 
-The server exposes the following components through the Model Context Protocol:
+The server exposes functionality through two interfaces: the Model Context Protocol (MCP) and a RESTful HTTP API.
 
-### Tools
+### MCP Server Components
+
+The following components are available via the MCP server (`server.py`):
+
+#### Tools
 
 #### 1. `transcribe_audio`
 
@@ -130,56 +159,86 @@ The server exposes the following components through the Model Context Protocol:
     *   `file_processed` (string): The original `audio_file_path` that was processed.
     *   `transcription` (string): The transcribed text, potentially formatted with timestamps.
 
-### Resources
-
-#### 1. ASR Model Information
-
-*   **URI:** `info://asr_model`
-*   **Name:** `asr_model_information`
-*   **Description:** Provides detailed information about the ASR model being used (NVIDIA Parakeet TDT 0.6B V2).
-*   **Returns:** A JSON object containing model details such as:
-    *   `model_name` (string)
-    *   `status` (string): "Loaded" or an error message.
-    *   `input_requirements` (string)
-    *   `output_type` (string)
-    *   `license` (string)
-    *   `note` (string)
-
 #### 2. System Hardware Specifications
 
 *   **URI:** `info://system_hardware_specs`
 *   **Name:** `system_hardware_specifications`
 *   **Description:** Retrieves system hardware specifications relevant for performance estimation, such as OS, CPU, RAM, and GPU details.
-*   **Returns:** A JSON object containing:
-    *   `os_platform` (string): Operating system platform (e.g., "Linux", "Darwin", "Windows").
-    *   `os_version` (string): OS version.
-    *   `os_release` (string): OS release.
-    *   `architecture` (string): System architecture (e.g., "x86_64", "arm64").
-    *   `cpu_model` (string): CPU model name.
-    *   `cpu_physical_cores` (integer): Number of physical CPU cores.
-    *   `cpu_logical_cores` (integer): Number of logical CPU cores (threads).
-    *   `cpu_frequency_max_ghz` (float/string): Maximum CPU frequency in GHz (or "N/A").
-    *   `ram_total_gb` (float): Total system RAM in Gigabytes.
-    *   `ram_available_gb` (float): Available system RAM in Gigabytes.
-    *   `cuda_available` (boolean): True if an NVIDIA GPU with CUDA is detected by PyTorch.
-    *   `cuda_version` (string, optional): CUDA version if available.
-    *   `gpu_count` (integer): Number of detected GPUs (primarily NVIDIA GPUs via CUDA).
-    *   `gpus` (list of objects): Detailed information for each detected GPU.
-        *   `name` (string): GPU name (e.g., "NVIDIA GeForce RTX 3080", "Apple Metal Performance Shaders (MPS)").
-        *   `memory_total_gb` (float/string): Total GPU memory in Gigabytes (or "N/A" or descriptive string for integrated/shared memory).
-        *   `cuda_capability` (tuple, optional): CUDA compute capability (e.g., `(8, 6)`), if applicable.
-        *   `notes` (string, optional): Additional notes, e.g., about MPS availability.
-    *   `error` (string, optional): Present if there was an error retrieving some or all specs.
-    *   `error_partial_results` (string, optional): Present if an error occurred after some specs were already gathered.
+*   **Returns:** A JSON object containing system hardware details (see `server.py` for full structure).
+
+### REST API Endpoints (FastAPI)
+
+The following endpoints are available via the FastAPI server (`api/main.py`), typically running on `http://localhost:8000`:
+
+#### 1. Transcribe Audio
+
+*   **Endpoint:** `POST /transcribe/`
+*   **Description:** Transcribes an uploaded audio or video file.
+*   **Request Type:** `multipart/form-data`
+*   **Form Fields:**
+    *   `file` (File, required): The audio or video file to be transcribed.
+    *   `output_format` (string, optional, default: `"wav"`): Intermediate audio format (`"wav"` or `"flac"`).
+    *   `include_timestamps` (boolean, optional, default: `True`): Whether to include word/segment timestamps.
+    *   `line_character_limit` (integer, optional, default: `80`, min: 40, max: 200): Character limit per line for timestamped output.
+    *   `segment_length_minutes` (integer, optional, default: `5`, min: 1, max: 24): Max audio segment length in minutes.
+*   **Success Response (200 OK):**
+    ```json
+    {
+      "message": "Transcription successful with formatted timestamps.",
+      "file_processed": "your_audio_file.mp3",
+      "transcription": "The transcribed text..."
+    }
+    ```
+*   **Error Response (e.g., 400, 422, 500):** JSON object with a `detail` field describing the error.
+
+#### 2. ASR Model Information
+
+*   **Endpoint:** `GET /info/asr-model/`
+*   **Description:** Provides detailed information about the ASR model.
+*   **Success Response (200 OK):**
+    ```json
+    {
+      "model_name": "NVIDIA Parakeet TDT 0.6B V2 (En)",
+      "status": "Loaded",
+      "input_requirements": "16kHz Audio (.wav or .flac), Monochannel",
+      "output_type": "Text with optional Punctuation, Capitalization, and Timestamps.",
+      "license": "CC-BY-4.0",
+      "note": "This model is optimized for NVIDIA GPU-accelerated systems."
+    }
+    ```
+
+#### 3. System Hardware Specifications
+
+*   **Endpoint:** `GET /info/system-hardware/`
+*   **Description:** Retrieves system hardware specifications.
+*   **Success Response (200 OK):** A JSON object containing system hardware details (see `api/main.py` `SystemHardwareResponse` model for full structure).
+    ```json
+    // Example structure (fields may vary based on system)
+    {
+      "os_platform": "Darwin",
+      "os_version": "...",
+      "cpu_model": "Apple M1 Pro",
+      "ram_total_gb": 16.0,
+      "cuda_available": false,
+      "gpus": [
+        {
+          "name": "Apple Metal Performance Shaders (MPS)",
+          "memory_total_gb": "N/A (Shared with System Memory)",
+          "notes": "MPS is available for PyTorch on this Mac."
+        }
+      ]
+      // ... other fields ...
+    }
+    ```
 
 ## Recommended Workflow for Transcription
 
-1.  **Read Hardware Specs:** Use the `info://system_hardware_specs` resource to get details about the server's hardware.
-2.  **Determine Segment Length:** Based on the hardware (especially GPU availability and RAM), decide on an optimal `segment_length_minutes` for the `transcribe_audio` tool.
-    *   Powerful NVIDIA GPU: Can use longer segments (up to 24 mins).
-    *   No NVIDIA GPU / Low RAM: Use shorter segments (e.g., 1-10 mins, default is 5 mins).
-3.  **Transcribe Audio:** Call the `transcribe_audio` tool with the `audio_file_path` and your chosen `segment_length_minutes`.
-4.  **(Optional) Get Model Info:** Read the `info://asr_model` resource if you need details about the ASR model.
+This workflow applies to both MCP and REST API usage, adapting the component names/calls as needed.
+
+1.  **Read Hardware Specs:** Use `info://system_hardware_specs` (MCP) or `GET /info/system-hardware/` (API) to get hardware details.
+2.  **Determine Segment Length:** Based on hardware, choose an optimal `segment_length_minutes`.
+3.  **Transcribe Audio:** Call `transcribe_audio` (MCP) or `POST /transcribe/` (API) with the audio file and chosen parameters.
+4.  **(Optional) Get Model Info:** Use `info://asr_model` (MCP) or `GET /info/asr-model/` (API) for model details.
 
 ## Adding to MCP Client Hosts
 
@@ -241,7 +300,7 @@ You can interact with this MCP server using any FastMCP-compatible client. Here'
 import asyncio
 from fastmcp import Client
 
-# If running the server with 'fastmcp run server.py' (defaulting to STDIO):
+# If running the MCP server with 'fastmcp run server.py' (defaulting to STDIO):
 client = Client("server.py")
 
 # If running the server with HTTP, e.g., 'fastmcp run server.py --transport streamable-http --port 8000':

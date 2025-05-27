@@ -1,7 +1,16 @@
 fastmcp
-
+pydantic
 pydub
-
+torch
+torchaudio
+# For nemo_toolkit, ensure you have the ASR dependencies.
+# Using a more specific version range can be safer for reproducibility.
+# Consider nemo_toolkit[asr]~=1.23.0 if issues arise with later versions.
 nemo_toolkit[asr]
-pytest
-psutil 
+psutil
+# New dependencies for FastAPI
+fastapi
+uvicorn[standard]
+python-multipart
+
+pytest # For running tests
