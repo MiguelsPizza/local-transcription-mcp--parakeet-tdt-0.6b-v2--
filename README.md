@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/miguelspizza-local-transcription-mcp-parakeet-tdt-0-6b-v2-badge.png)](https://mseep.ai/app/miguelspizza-local-transcription-mcp-parakeet-tdt-0-6b-v2)
+
 # Parakeet Transcription MCP Server
 
 **Version:** 0.1.0
